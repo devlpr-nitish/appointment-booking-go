@@ -78,3 +78,28 @@ func UpdateExpertProfile(userID uint, bio, expertise string, hourlyRate float64)
 
 	return &expert, nil
 }
+
+func GetExperts(page, limit int) ([]models.Expert, int64, error) {
+	db := database.GetDB()
+	var experts []models.Expert
+	var total int64
+
+	if err := db.Model(&models.Expert{}).Count(&total).Error; err != nil {
+		return nil, 0, err
+	}
+
+	offset := (page - 1) * limit
+	if err := db.Preload("User").Offset(offset).Limit(limit).Find(&experts).Error; err != nil {
+		return nil, 0, err
+	}
+	return experts, total, nil
+}
+
+func GetExpertByCatergoryName(categoryName string) ([]models.Expert, error) {
+	db := database.GetDB()
+	var experts []models.Expert
+	if err := db.Preload("User").Where("expertise = ?", categoryName).Find(&experts).Error; err != nil {
+		return nil, err
+	}
+	return experts, nil
+}

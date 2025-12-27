@@ -22,11 +22,16 @@ func RespondSuccess(c echo.Context, status int, message string, data interface{}
 }
 
 func RespondError(c echo.Context, status int, err error, details interface{}) error {
+	reason := "Unknown error"
+	if err != nil {
+		reason = err.Error()
+	}
+
 	return c.JSON(status, APIResponse{
 		Success: false,
 		Message: http.StatusText(status),
 		Error: map[string]interface{}{
-			"reason":  err.Error(),
+			"reason":  reason,
 			"details": details,
 		},
 	})

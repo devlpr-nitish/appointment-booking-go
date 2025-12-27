@@ -15,8 +15,8 @@ type RegisterRequest struct {
 }
 
 type LoginRequest struct {
-	Identifier string `json:"identifier" validate:"required"` // Email
-	Password   string `json:"password" validate:"required,min=6"`
+	Email    string `json:"email" validate:"required"`
+	Password string `json:"password" validate:"required,min=6"`
 }
 
 func Register(c echo.Context) error {
@@ -46,11 +46,11 @@ func Login(c echo.Context) error {
 		return utils.RespondError(c, http.StatusBadRequest, err, "Invalid request format")
 	}
 
-	if req.Identifier == "" || req.Password == "" {
+	if req.Email == "" || req.Password == "" {
 		return utils.RespondError(c, http.StatusBadRequest, echo.NewHTTPError(http.StatusBadRequest, "Missing required field"), "email and password are required")
 	}
 
-	token, err := services.LoginUser(req.Identifier, req.Password)
+	token, err := services.LoginUser(req.Email, req.Password)
 
 	if err != nil {
 		return utils.RespondError(c, http.StatusUnauthorized, err, "invalid email or password")

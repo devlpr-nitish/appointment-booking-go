@@ -13,4 +13,6 @@ func ExpertRoutes(e *echo.Echo) {
 	g.POST("/profile", handlers.CreateExpertProfile)
 	g.GET("/profile", handlers.GetExpertProfile)
 	g.PATCH("/profile", handlers.UpdateExpertProfile)
+	g.GET("/get-experts", handlers.GetExperts)
+	g.GET("/search", handlers.GetExpertByCatergoryName)
 }

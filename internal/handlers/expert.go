@@ -1,7 +1,9 @@
 package handlers
 
 import (
+	"math"
 	"net/http"
+	"strconv"
 
 	"github.com/devlpr-nitish/appointment-booking-go/internal/models"
 	"github.com/devlpr-nitish/appointment-booking-go/internal/services"
@@ -71,4 +73,49 @@ func UpdateExpertProfile(c echo.Context) error {
 	}
 
 	return utils.RespondSuccess(c, http.StatusOK, "expert profile updated successfully", expert)
+}
+
+func GetExperts(c echo.Context) error {
+	page, _ := strconv.Atoi(c.QueryParam("page"))
+	if page < 1 {
+		page = 1
+	}
+
+	limit, _ := strconv.Atoi(c.QueryParam("limit"))
+	if limit < 1 {
+		limit = 10
+	}
+
+	experts, total, err := services.GetExperts(page, limit)
+	if err != nil {
+		return utils.RespondError(c, http.StatusInternalServerError, err, "failed to get experts")
+	}
+
+	totalPages := int(math.Ceil(float64(total) / float64(limit)))
+
+	response := map[string]interface{}{
+		"experts": experts,
+		"meta": map[string]interface{}{
+			"current_page": page,
+			"total_pages":  totalPages,
+			"total_items":  total,
+			"limit":        limit,
+		},
+	}
+
+	return utils.RespondSuccess(c, http.StatusOK, "experts retrieved successfully", response)
+}
+
+func GetExpertByCatergoryName(c echo.Context) error {
+	categoryName := c.QueryParam("category")
+	if categoryName == "" {
+		return utils.RespondError(c, http.StatusBadRequest, nil, "category name is required")
+	}
+
+	experts, err := services.GetExpertByCatergoryName(categoryName)
+	if err != nil {
+		return utils.RespondError(c, http.StatusInternalServerError, err, "failed to get experts")
+	}
+
+	return utils.RespondSuccess(c, http.StatusOK, "experts retrieved successfully", experts)
 }
