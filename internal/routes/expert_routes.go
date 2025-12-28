@@ -15,4 +15,5 @@ func ExpertRoutes(e *echo.Echo) {
 	g.PATCH("/profile", handlers.UpdateExpertProfile)
 	g.GET("/get-experts", handlers.GetExperts)
 	g.GET("/search", handlers.GetExpertByCatergoryName)
+	g.GET("/get-expert-by-id/:id", handlers.GetExpertById)
 }

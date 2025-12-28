@@ -119,3 +119,22 @@ func GetExpertByCatergoryName(c echo.Context) error {
 
 	return utils.RespondSuccess(c, http.StatusOK, "experts retrieved successfully", experts)
 }
+
+func GetExpertById(c echo.Context) error {
+	idStr := c.Param("id")
+	if idStr == "" {
+		return utils.RespondError(c, http.StatusBadRequest, nil, "expert id is required")
+	}
+
+	id, err := strconv.ParseUint(idStr, 10, 32)
+	if err != nil {
+		return utils.RespondError(c, http.StatusBadRequest, err, "invalid expert id")
+	}
+
+	expert, err := services.GetExpertById(uint(id))
+	if err != nil {
+		return utils.RespondError(c, http.StatusInternalServerError, err, "failed to get expert")
+	}
+
+	return utils.RespondSuccess(c, http.StatusOK, "expert retrieved successfully", expert)
+}

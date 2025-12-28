@@ -103,3 +103,12 @@ func GetExpertByCatergoryName(categoryName string) ([]models.Expert, error) {
 	}
 	return experts, nil
 }
+
+func GetExpertById(id uint) (*models.Expert, error) {
+	db := database.GetDB()
+	var expert models.Expert
+	if err := db.Preload("User").Where("id = ?", id).First(&expert).Error; err != nil {
+		return nil, err
+	}
+	return &expert, nil
+}
