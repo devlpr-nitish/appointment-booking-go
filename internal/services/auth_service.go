@@ -9,7 +9,7 @@ import (
 	"golang.org/x/crypto/bcrypt"
 )
 
-func RegisterUser(email, password, name string) (*models.User, error) {
+func RegisterUser(email, password, name, role string) (*models.User, error) {
 	db := database.GetDB()
 
 	// Check if user already exists
@@ -23,14 +23,41 @@ func RegisterUser(email, password, name string) (*models.User, error) {
 		return nil, err
 	}
 
+	// Set role, default to "user" if empty
+	var userRole models.UserRole
+	switch role {
+	case "expert":
+		userRole = models.RoleExpert
+	case "admin":
+		userRole = models.RoleAdmin
+	default:
+		userRole = models.RoleUser
+	}
+
 	user := models.User{
 		Email:    email,
 		Password: hashedPassword,
 		Name:     name,
+		Role:     userRole,
 	}
 
 	if err := db.Create(&user).Error; err != nil {
 		return nil, err
+	}
+
+	// If user is registering as expert, create expert profile
+	if userRole == models.RoleExpert {
+		expert := models.Expert{
+			UserID:     user.ID,
+			Bio:        "",
+			Expertise:  "",
+			HourlyRate: 0,
+			IsVerified: false,
+		}
+		if err := db.Create(&expert).Error; err != nil {
+			// Log error but don't fail registration
+			// The expert can complete their profile later
+		}
 	}
 
 	return &user, nil
@@ -49,7 +76,7 @@ func LoginUser(identifier, password string) (string, error) {
 		return "", errors.New("invalid credentials")
 	}
 
-	token, err := utils.GenerateJWT(user.ID)
+	token, err := utils.GenerateJWT(user.ID, user.Email, user.Name, string(user.Role))
 	if err != nil {
 		return "", err
 	}

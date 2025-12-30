@@ -12,6 +12,7 @@ type RegisterRequest struct {
 	Email    string `json:"email" validate:"required"`
 	Password string `json:"password" validate:"required,min=6"`
 	Name     string `json:"name"`
+	Role     string `json:"role"`
 }
 
 type LoginRequest struct {
@@ -30,7 +31,17 @@ func Register(c echo.Context) error {
 		return utils.RespondError(c, http.StatusBadRequest, echo.NewHTTPError(http.StatusBadRequest, "Missing required field"), "email and password are required")
 	}
 
-	user, err := services.RegisterUser(req.Email, req.Password, req.Name)
+	// Validate role
+	if req.Role != "" && req.Role != "user" && req.Role != "expert" {
+		return utils.RespondError(c, http.StatusBadRequest, echo.NewHTTPError(http.StatusBadRequest, "Invalid role"), "role must be either 'user' or 'expert'")
+	}
+
+	// Default to "user" if no role specified
+	if req.Role == "" {
+		req.Role = "user"
+	}
+
+	user, err := services.RegisterUser(req.Email, req.Password, req.Name, req.Role)
 
 	if err != nil {
 		return utils.RespondError(c, http.StatusInternalServerError, err, "Registration failed")

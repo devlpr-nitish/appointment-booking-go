@@ -29,15 +29,18 @@ func CreateBooking(userID, expertID, slotID uint) (*models.Booking, error) {
 		return nil, err
 	}
 
-	if slot.IsBooked {
-		return nil, errors.New("slot is already booked")
-	}
+	// TODO: Update booking logic to work with recurring availability slots
+	// The availability model now uses recurring weekly slots, not specific bookable slots
+	// Need to check if there's already a booking for the specific date/time
+	// if slot.IsBooked {
+	// 	return nil, errors.New("slot is already booked")
+	// }
 
 	if slot.ExpertID != expertID {
 		return nil, errors.New("slot does not belong to the specified expert")
 	}
 
-	// 3. Create Booking & Update Slot (Transaction)
+	// 3. Create Booking (Transaction)
 	tx := db.Begin()
 
 	booking := models.Booking{
@@ -52,10 +55,11 @@ func CreateBooking(userID, expertID, slotID uint) (*models.Booking, error) {
 		return nil, err
 	}
 
-	if err := tx.Model(&slot).Update("is_booked", true).Error; err != nil {
-		tx.Rollback()
-		return nil, err
-	}
+	// TODO: Update slot booking status logic for recurring slots
+	// if err := tx.Model(&slot).Update("is_booked", true).Error; err != nil {
+	// 	tx.Rollback()
+	// 	return nil, err
+	// }
 
 	if err := tx.Commit().Error; err != nil {
 		return nil, err

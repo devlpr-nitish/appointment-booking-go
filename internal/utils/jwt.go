@@ -11,10 +11,13 @@ import (
 
 var jwtSecret = []byte(os.Getenv("JWT_SECRET"))
 
-func GenerateJWT(userID uint) (string, error) {
+func GenerateJWT(userID uint, email string, name string, role string) (string, error) {
 
 	claims := jwt.MapClaims{
 		"user_id": userID,
+		"email":   email,
+		"name":    name,
+		"role":    role,
 		"exp":     time.Now().Add(time.Hour * 24).Unix(),
 		"iat":     time.Now().Unix(),
 	}

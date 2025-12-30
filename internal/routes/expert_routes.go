@@ -16,4 +16,10 @@ func ExpertRoutes(e *echo.Echo) {
 	g.GET("/get-experts", handlers.GetExperts)
 	g.GET("/search", handlers.GetExpertByCatergoryName)
 	g.GET("/get-expert-by-id/:id", handlers.GetExpertById)
+
+	// Availability routes
+	g.POST("/availability", handlers.CreateAvailability)
+	g.GET("/availability", handlers.GetAvailability)
+	g.PATCH("/availability/:id", handlers.UpdateAvailability)
+	g.DELETE("/availability/:id", handlers.DeleteAvailability)
 }

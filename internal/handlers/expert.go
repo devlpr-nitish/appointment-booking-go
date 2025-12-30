@@ -53,7 +53,33 @@ func GetExpertProfile(c echo.Context) error {
 		return utils.RespondError(c, http.StatusNotFound, err, "expert profile not found")
 	}
 
-	return utils.RespondSuccess(c, http.StatusOK, "expert profile retrieved successfully", expert)
+	// Calculate profile completion percentage
+	completionPercentage := calculateProfileCompletion(expert)
+
+	response := map[string]interface{}{
+		"expert":                expert,
+		"completion_percentage": completionPercentage,
+	}
+
+	return utils.RespondSuccess(c, http.StatusOK, "expert profile retrieved successfully", response)
+}
+
+// calculateProfileCompletion calculates the profile completion percentage
+func calculateProfileCompletion(expert *models.Expert) int {
+	totalFields := 3
+	completedFields := 0
+
+	if expert.Bio != "" {
+		completedFields++
+	}
+	if expert.Expertise != "" {
+		completedFields++
+	}
+	if expert.HourlyRate > 0 {
+		completedFields++
+	}
+
+	return (completedFields * 100) / totalFields
 }
 
 func UpdateExpertProfile(c echo.Context) error {
