@@ -3,6 +3,7 @@ package services
 import (
 	"errors"
 	"fmt"
+	"time"
 
 	"github.com/devlpr-nitish/appointment-booking-go/internal/database"
 	"github.com/devlpr-nitish/appointment-booking-go/internal/models"
@@ -118,4 +119,88 @@ func DeleteAvailability(id, expertID uint) error {
 	}
 
 	return nil
+}
+
+// TimeSlot represents a bookable time slot
+type TimeSlot struct {
+	Time      string `json:"time"`
+	Available bool   `json:"available"`
+	ID        uint   `json:"id"`
+}
+
+// GetAvailableSlots generates available time slots for an expert on a specific date
+func GetAvailableSlots(expertID uint, date string) ([]TimeSlot, error) {
+	db := database.GetDB()
+
+	// Parse the date to get day of week
+	parsedDate, err := time.Parse("2006-01-02", date)
+	if err != nil {
+		return nil, errors.New("invalid date format, expected YYYY-MM-DD")
+	}
+
+	dayOfWeek := int(parsedDate.Weekday())
+
+	// Get all availability slots for this expert on this day of week
+	var availabilitySlots []models.AvailabilitySlot
+	if err := db.Where("expert_id = ? AND day_of_week = ?", expertID, dayOfWeek).
+		Order("start_time ASC").
+		Find(&availabilitySlots).Error; err != nil {
+		return nil, err
+	}
+
+	// If no availability slots, return empty array
+	if len(availabilitySlots) == 0 {
+		return []TimeSlot{}, nil
+	}
+
+	// Get all bookings for this expert on this date
+	var bookings []models.Booking
+	if err := db.Preload("Slot").
+		Where("expert_id = ? AND status != ?", expertID, models.BookingStatusCancelled).
+		Find(&bookings).Error; err != nil {
+		return nil, err
+	}
+
+	// Create a map of booked times for quick lookup
+	bookedTimes := make(map[string]bool)
+	for _, booking := range bookings {
+		// For each booking, mark the time slot as booked
+		bookedTimes[booking.Slot.StartTime] = true
+	}
+
+	// Generate time slots
+	var timeSlots []TimeSlot
+	slotDuration := 30 // 30 minutes per slot
+
+	for _, availSlot := range availabilitySlots {
+		// Parse start and end times
+		startTime, err := time.Parse("15:04", availSlot.StartTime)
+		if err != nil {
+			continue
+		}
+		endTime, err := time.Parse("15:04", availSlot.EndTime)
+		if err != nil {
+			continue
+		}
+
+		// Generate slots in 30-minute intervals
+		currentTime := startTime
+		for currentTime.Before(endTime) {
+			timeStr := currentTime.Format("15:04")
+
+			// Check if this time is booked
+			isAvailable := !bookedTimes[timeStr]
+
+			timeSlots = append(timeSlots, TimeSlot{
+				Time:      timeStr,
+				Available: isAvailable,
+				ID:        availSlot.ID,
+			})
+
+			// Move to next slot
+			currentTime = currentTime.Add(time.Duration(slotDuration) * time.Minute)
+		}
+	}
+
+	return timeSlots, nil
 }

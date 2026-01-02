@@ -142,3 +142,30 @@ func DeleteAvailability(c echo.Context) error {
 
 	return utils.RespondSuccess(c, http.StatusOK, "availability deleted successfully", nil)
 }
+
+// GetAvailableSlots returns available time slots for an expert on a specific date
+func GetAvailableSlots(c echo.Context) error {
+	expertIDStr := c.QueryParam("expertId")
+	if expertIDStr == "" {
+		return utils.RespondError(c, http.StatusBadRequest, nil, "expertId query parameter is required")
+	}
+
+	expertID, err := strconv.ParseUint(expertIDStr, 10, 32)
+	if err != nil {
+		return utils.RespondError(c, http.StatusBadRequest, err, "invalid expertId")
+	}
+
+	date := c.QueryParam("date")
+	if date == "" {
+		return utils.RespondError(c, http.StatusBadRequest, nil, "date query parameter is required")
+	}
+
+	slots, err := services.GetAvailableSlots(uint(expertID), date)
+	if err != nil {
+		return utils.RespondError(c, http.StatusInternalServerError, err, "failed to get available slots")
+	}
+
+	return utils.RespondSuccess(c, http.StatusOK, "available slots retrieved successfully", map[string]interface{}{
+		"slots": slots,
+	})
+}
