@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"net/http"
+	"strconv"
 	"strings"
 
 	"github.com/devlpr-nitish/appointment-booking-go/internal/models"
@@ -57,4 +58,33 @@ func GetUserBookings(c echo.Context) error {
 	}
 
 	return utils.RespondSuccess(c, http.StatusOK, "bookings fetched successfully", bookings)
+}
+
+type CancelBookingRequest struct {
+	Reason string `json:"reason" validate:"required"`
+}
+
+func CancelBooking(c echo.Context) error {
+	idParam := c.Param("id")
+	id, err := strconv.Atoi(idParam)
+	if err != nil {
+		return utils.RespondError(c, http.StatusBadRequest, nil, "invalid booking id")
+	}
+	bookingID := uint(id)
+
+	var req CancelBookingRequest
+	if err := c.Bind(&req); err != nil {
+		return utils.RespondError(c, http.StatusBadRequest, err, "invalid request body")
+	}
+
+	user, ok := c.Get("user").(*models.User)
+	if !ok {
+		return utils.RespondError(c, http.StatusUnauthorized, nil, "unauthorized")
+	}
+
+	if err := services.CancelBooking(bookingID, user.ID, req.Reason); err != nil {
+		return utils.RespondError(c, http.StatusInternalServerError, err, "failed to cancel booking")
+	}
+
+	return utils.RespondSuccess(c, http.StatusOK, "booking cancelled successfully", nil)
 }

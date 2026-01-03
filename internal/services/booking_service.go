@@ -110,3 +110,44 @@ func GetBookingsByUserID(userID uint) ([]models.Booking, error) {
 	}
 	return bookings, nil
 }
+
+func CancelBooking(bookingID, userID uint, reason string) error {
+	db := database.GetDB()
+	var booking models.Booking
+
+	if err := db.First(&booking, bookingID).Error; err != nil {
+		return err
+	}
+
+	if booking.UserID != userID {
+		return errors.New("unauthorized to cancel this booking")
+	}
+
+	if booking.Status == models.BookingStatusCancelled {
+		return errors.New("booking is already cancelled")
+	}
+
+	if booking.Status == models.BookingStatusConfirmed {
+		return errors.New("cannot cancel a confirmed booking")
+	}
+
+	// Logic: If pending, check if booking time is exceeded by 30 minutes
+	if booking.Status == models.BookingStatusPending {
+		// Construct booking start datetime
+		bookingDateTimeStr := booking.BookingDate + " " + booking.StartTime
+		bookingTime, err := time.Parse("2006-01-02 15:04", bookingDateTimeStr)
+		if err == nil {
+			// If Now > BookingTime + 30m
+			if time.Now().After(bookingTime.Add(30 * time.Minute)) {
+				// User said "will not get any refund".
+				// We can either block cancellation or allow it with a note.
+				// Blocking simplifies "checks".
+				return errors.New("cannot cancel: booking time exceeded by 30 minutes")
+			}
+		}
+	}
+
+	booking.Status = models.BookingStatusCancelled
+	booking.CancellationReason = reason
+	return db.Save(&booking).Error
+}

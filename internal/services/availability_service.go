@@ -11,13 +11,16 @@ import (
 )
 
 // CreateAvailability creates a new availability slot for an expert
-func CreateAvailability(expertID uint, dayOfWeek int, startTime, endTime string) (*models.AvailabilitySlot, error) {
+func CreateAvailability(expertID uint, startTime, endTime string, isRecurring bool, dateStr string) (*models.AvailabilitySlot, error) {
 	db := database.GetDB()
 
-	// Validate day of week
-	if dayOfWeek < 0 || dayOfWeek > 6 {
-		return nil, errors.New("day of week must be between 0 (Sunday) and 6 (Saturday)")
+	// Parse date
+	parsedDate, err := time.Parse("2006-01-02", dateStr)
+	if err != nil {
+		return nil, errors.New("invalid date format, expected YYYY-MM-DD")
 	}
+
+	dayOfWeek := int(parsedDate.Weekday())
 
 	// Validate that the expert exists
 	var expert models.Expert
@@ -28,22 +31,57 @@ func CreateAvailability(expertID uint, dayOfWeek int, startTime, endTime string)
 		return nil, err
 	}
 
-	// Check for overlapping availability on the same day
-	var existingSlot models.AvailabilitySlot
-	err := db.Where("expert_id = ? AND day_of_week = ? AND ((start_time <= ? AND end_time > ?) OR (start_time < ? AND end_time >= ?) OR (start_time >= ? AND end_time <= ?))",
-		expertID, dayOfWeek, startTime, startTime, endTime, endTime, startTime, endTime).First(&existingSlot).Error
+	// Check for overlapping availability
+	// Overlap check needs to consider:
+	// 1. Same Expert
+	// 2. Time overlap
+	// 3. Condition:
+	//    - If new is recurring: check against any recurring on same DayOfWeek, OR any specific date on that DayOfWeek
+	//    - If new is specific: check against any recurring on same DayOfWeek, OR any specific date on same Date
 
-	if err == nil {
+	// Simplified overlap check: Check everything on this "DayOfWeek" that MIGHT conflict.
+	// If new is recurring (Every Monday): Conflict if there's another Recurring Monday, OR a Specific Monday (e.g. Nov 11)??
+	// Actually, if I have "Every Monday 9-5", adding "Nov 11 10-11" is redundant/overlap.
+	// If I have "Nov 11 9-5", adding "Every Monday 9-5" is overlap.
+
+	// Query finds any slot that overlaps in time AND:
+	// (Existing.IsRecurring = true AND Existing.DayOfWeek = New.DayOfWeek) OR
+	// (Existing.IsRecurring = false AND Existing.Date = New.Date) OR
+	// (New.IsRecurring = true AND Existing.IsRecurring = false AND Existing.DayOfWeek = New.DayOfWeek) OR
+	// (New.IsRecurring = false AND Existing.IsRecurring = true AND Existing.DayOfWeek = New.DayOfWeek)
+
+	// Basically: If DayOfWeek matches AND (Both Recurring OR Both Specific Same Date OR Mixed)
+	// Mixed is tricky. "Every Monday" vs "Monday Nov 11". They overlap in reality on Nov 11.
+	// So we should just check: overlapping time on the SAME EFFECTIVE DAY.
+
+	query := db.Where("expert_id = ? AND ((start_time < ? AND end_time > ?))", expertID, endTime, startTime)
+
+	if isRecurring {
+		// New is recurring: conflicts with ANY slot on this DayOfWeek (recurring or specific)
+		query = query.Where("day_of_week = ?", dayOfWeek)
+	} else {
+		// New is specific: conflicts with Recurring slots on this DayOfWeek OR Specific slot on this Date
+		query = query.Where("(is_recurring = ? AND day_of_week = ?) OR (is_recurring = ? AND date = ?)",
+			true, dayOfWeek, false, parsedDate)
+	}
+
+	var existingSlot models.AvailabilitySlot
+	if err := query.First(&existingSlot).Error; err == nil {
 		return nil, errors.New("availability slot overlaps with existing slot")
 	} else if !errors.Is(err, gorm.ErrRecordNotFound) {
 		return nil, err
 	}
 
 	availability := models.AvailabilitySlot{
-		ExpertID:  expertID,
-		DayOfWeek: dayOfWeek,
-		StartTime: startTime,
-		EndTime:   endTime,
+		ExpertID:    expertID,
+		DayOfWeek:   dayOfWeek,
+		StartTime:   startTime,
+		EndTime:     endTime,
+		IsRecurring: isRecurring,
+	}
+
+	if !isRecurring {
+		availability.Date = &parsedDate
 	}
 
 	if err := db.Create(&availability).Error; err != nil {
@@ -66,13 +104,16 @@ func GetAvailabilityByExpertID(expertID uint) ([]models.AvailabilitySlot, error)
 }
 
 // UpdateAvailability updates an existing availability slot
-func UpdateAvailability(id, expertID uint, dayOfWeek int, startTime, endTime string) (*models.AvailabilitySlot, error) {
+func UpdateAvailability(id, expertID uint, startTime, endTime string, isRecurring bool, dateStr string) (*models.AvailabilitySlot, error) {
 	db := database.GetDB()
 
-	// Validate day of week
-	if dayOfWeek < 0 || dayOfWeek > 6 {
-		return nil, errors.New("day of week must be between 0 (Sunday) and 6 (Saturday)")
+	// Parse date
+	parsedDate, err := time.Parse("2006-01-02", dateStr)
+	if err != nil {
+		return nil, errors.New("invalid date format, expected YYYY-MM-DD")
 	}
+
+	dayOfWeek := int(parsedDate.Weekday())
 
 	var availability models.AvailabilitySlot
 	if err := db.Where("id = ? AND expert_id = ?", id, expertID).First(&availability).Error; err != nil {
@@ -82,12 +123,18 @@ func UpdateAvailability(id, expertID uint, dayOfWeek int, startTime, endTime str
 		return nil, err
 	}
 
-	// Check for overlapping availability on the same day (excluding current slot)
-	var existingSlot models.AvailabilitySlot
-	err := db.Where("expert_id = ? AND day_of_week = ? AND id != ? AND ((start_time <= ? AND end_time > ?) OR (start_time < ? AND end_time >= ?) OR (start_time >= ? AND end_time <= ?))",
-		expertID, dayOfWeek, id, startTime, startTime, endTime, endTime, startTime, endTime).First(&existingSlot).Error
+	// Check for overlapping availability (excluding current)
+	query := db.Where("expert_id = ? AND id != ? AND ((start_time < ? AND end_time > ?))", expertID, id, endTime, startTime)
 
-	if err == nil {
+	if isRecurring {
+		query = query.Where("day_of_week = ?", dayOfWeek)
+	} else {
+		query = query.Where("(is_recurring = ? AND day_of_week = ?) OR (is_recurring = ? AND date = ?)",
+			true, dayOfWeek, false, parsedDate)
+	}
+
+	var existingSlot models.AvailabilitySlot
+	if err := query.First(&existingSlot).Error; err == nil {
 		return nil, errors.New("availability slot overlaps with existing slot")
 	} else if !errors.Is(err, gorm.ErrRecordNotFound) {
 		return nil, err
@@ -97,6 +144,13 @@ func UpdateAvailability(id, expertID uint, dayOfWeek int, startTime, endTime str
 	availability.DayOfWeek = dayOfWeek
 	availability.StartTime = startTime
 	availability.EndTime = endTime
+	availability.IsRecurring = isRecurring
+
+	if !isRecurring {
+		availability.Date = &parsedDate
+	} else {
+		availability.Date = nil
+	}
 
 	if err := db.Save(&availability).Error; err != nil {
 		return nil, err
@@ -140,8 +194,10 @@ func GetAvailableSlots(expertID uint, date string) ([]TimeSlot, error) {
 	dayOfWeek := int(parsedDate.Weekday())
 
 	// Get all availability slots for this expert (Master Availability)
+	// Includes Recurring slots for this DayOfWeek AND Specific slots for this Date
 	var availabilitySlots []models.AvailabilitySlot
-	if err := db.Where("expert_id = ? AND day_of_week = ?", expertID, dayOfWeek).
+	if err := db.Where("expert_id = ? AND ((is_recurring = ? AND day_of_week = ?) OR (is_recurring = ? AND date = ?))",
+		expertID, true, dayOfWeek, false, parsedDate).
 		Order("start_time ASC").
 		Find(&availabilitySlots).Error; err != nil {
 		return nil, err

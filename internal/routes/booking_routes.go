@@ -12,4 +12,5 @@ func BookingRoutes(e *echo.Echo) {
 
 	g.POST("/create-booking", handlers.CreateBooking)
 	g.GET("/user", handlers.GetUserBookings)
+	g.POST("/:id/cancel", handlers.CancelBooking)
 }

@@ -11,15 +11,17 @@ import (
 )
 
 type CreateAvailabilityRequest struct {
-	DayOfWeek int    `json:"day_of_week" validate:"required,min=0,max=6"`
-	StartTime string `json:"start_time" validate:"required"`
-	EndTime   string `json:"end_time" validate:"required"`
+	StartTime   string `json:"start_time" validate:"required"`
+	EndTime     string `json:"end_time" validate:"required"`
+	IsRecurring bool   `json:"is_recurring"`
+	Date        string `json:"date" validate:"required"`
 }
 
 type UpdateAvailabilityRequest struct {
-	DayOfWeek int    `json:"day_of_week" validate:"required,min=0,max=6"`
-	StartTime string `json:"start_time" validate:"required"`
-	EndTime   string `json:"end_time" validate:"required"`
+	StartTime   string `json:"start_time" validate:"required"`
+	EndTime     string `json:"end_time" validate:"required"`
+	IsRecurring bool   `json:"is_recurring"`
+	Date        string `json:"date" validate:"required"`
 }
 
 // CreateAvailability creates a new availability slot for the authenticated expert
@@ -44,7 +46,7 @@ func CreateAvailability(c echo.Context) error {
 		return utils.RespondError(c, http.StatusNotFound, err, "expert profile not found")
 	}
 
-	availability, err := services.CreateAvailability(expert.ID, req.DayOfWeek, req.StartTime, req.EndTime)
+	availability, err := services.CreateAvailability(expert.ID, req.StartTime, req.EndTime, req.IsRecurring, req.Date)
 	if err != nil {
 		return utils.RespondError(c, http.StatusBadRequest, err, "failed to create availability")
 	}
@@ -105,7 +107,7 @@ func UpdateAvailability(c echo.Context) error {
 		return utils.RespondError(c, http.StatusNotFound, err, "expert profile not found")
 	}
 
-	availability, err := services.UpdateAvailability(uint(id), expert.ID, req.DayOfWeek, req.StartTime, req.EndTime)
+	availability, err := services.UpdateAvailability(uint(id), expert.ID, req.StartTime, req.EndTime, req.IsRecurring, req.Date)
 	if err != nil {
 		return utils.RespondError(c, http.StatusBadRequest, err, "failed to update availability")
 	}
