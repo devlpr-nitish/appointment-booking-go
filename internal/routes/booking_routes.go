@@ -11,4 +11,5 @@ func BookingRoutes(e *echo.Echo) {
 	g.Use(middleware.AuthMiddleware)
 
 	g.POST("/create-booking", handlers.CreateBooking)
+	g.GET("/user", handlers.GetUserBookings)
 }

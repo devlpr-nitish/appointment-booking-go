@@ -121,14 +121,13 @@ func DeleteAvailability(id, expertID uint) error {
 	return nil
 }
 
-// TimeSlot represents a bookable time slot
+// TimeSlot represents a free time interval
 type TimeSlot struct {
-	Time      string `json:"time"`
-	Available bool   `json:"available"`
-	ID        uint   `json:"id"`
+	Start string `json:"start"`
+	End   string `json:"end"`
 }
 
-// GetAvailableSlots generates available time slots for an expert on a specific date
+// GetAvailableSlots calculates available time ranges for an expert on a specific date
 func GetAvailableSlots(expertID uint, date string) ([]TimeSlot, error) {
 	db := database.GetDB()
 
@@ -140,7 +139,7 @@ func GetAvailableSlots(expertID uint, date string) ([]TimeSlot, error) {
 
 	dayOfWeek := int(parsedDate.Weekday())
 
-	// Get all availability slots for this expert on this day of week
+	// Get all availability slots for this expert (Master Availability)
 	var availabilitySlots []models.AvailabilitySlot
 	if err := db.Where("expert_id = ? AND day_of_week = ?", expertID, dayOfWeek).
 		Order("start_time ASC").
@@ -148,59 +147,53 @@ func GetAvailableSlots(expertID uint, date string) ([]TimeSlot, error) {
 		return nil, err
 	}
 
-	// If no availability slots, return empty array
 	if len(availabilitySlots) == 0 {
 		return []TimeSlot{}, nil
 	}
 
-	// Get all bookings for this expert on this date
+	// Get all confirmed bookings for this date
 	var bookings []models.Booking
-	if err := db.Preload("Slot").
-		Where("expert_id = ? AND status != ?", expertID, models.BookingStatusCancelled).
+	if err := db.Where("expert_id = ? AND booking_date = ? AND status != ?", expertID, date, models.BookingStatusCancelled).
+		Order("start_time ASC").
 		Find(&bookings).Error; err != nil {
 		return nil, err
 	}
 
-	// Create a map of booked times for quick lookup
-	bookedTimes := make(map[string]bool)
-	for _, booking := range bookings {
-		// For each booking, mark the time slot as booked
-		bookedTimes[booking.Slot.StartTime] = true
+	var freeSlots []TimeSlot
+
+	// Process each availability slot
+	for _, avail := range availabilitySlots {
+		// Start with the full availability slot as free
+		currentRanges := []TimeSlot{{Start: avail.StartTime, End: avail.EndTime}}
+
+		// Subtract each booking from the current ranges
+		for _, booking := range bookings {
+			var nextRanges []TimeSlot
+			for _, r := range currentRanges {
+				// Check for overlap
+				// Booking: [bS, bE], Range: [rS, rE]
+				// Overlap if bS < rE AND bE > rS
+				if booking.StartTime < r.End && booking.EndTime > r.Start {
+					// Overlap exists. Calculate remaining parts.
+
+					// Part before booking?
+					if booking.StartTime > r.Start {
+						nextRanges = append(nextRanges, TimeSlot{Start: r.Start, End: booking.StartTime})
+					}
+
+					// Part after booking?
+					if booking.EndTime < r.End {
+						nextRanges = append(nextRanges, TimeSlot{Start: booking.EndTime, End: r.End})
+					}
+				} else {
+					// No overlap, keep range
+					nextRanges = append(nextRanges, r)
+				}
+			}
+			currentRanges = nextRanges
+		}
+		freeSlots = append(freeSlots, currentRanges...)
 	}
 
-	// Generate time slots
-	var timeSlots []TimeSlot
-	slotDuration := 30 // 30 minutes per slot
-
-	for _, availSlot := range availabilitySlots {
-		// Parse start and end times
-		startTime, err := time.Parse("15:04", availSlot.StartTime)
-		if err != nil {
-			continue
-		}
-		endTime, err := time.Parse("15:04", availSlot.EndTime)
-		if err != nil {
-			continue
-		}
-
-		// Generate slots in 30-minute intervals
-		currentTime := startTime
-		for currentTime.Before(endTime) {
-			timeStr := currentTime.Format("15:04")
-
-			// Check if this time is booked
-			isAvailable := !bookedTimes[timeStr]
-
-			timeSlots = append(timeSlots, TimeSlot{
-				Time:      timeStr,
-				Available: isAvailable,
-				ID:        availSlot.ID,
-			})
-
-			// Move to next slot
-			currentTime = currentTime.Add(time.Duration(slotDuration) * time.Minute)
-		}
-	}
-
-	return timeSlots, nil
+	return freeSlots, nil
 }
