@@ -5,6 +5,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/devlpr-nitish/appointment-booking-go/internal/database"
 	"github.com/devlpr-nitish/appointment-booking-go/internal/models"
 	"github.com/devlpr-nitish/appointment-booking-go/internal/services"
 	"github.com/devlpr-nitish/appointment-booking-go/internal/utils"
@@ -87,4 +88,68 @@ func CancelBooking(c echo.Context) error {
 	}
 
 	return utils.RespondSuccess(c, http.StatusOK, "booking cancelled successfully", nil)
+}
+
+func GetExpertBookings(c echo.Context) error {
+	user, ok := c.Get("user").(*models.User)
+	if !ok {
+		return utils.RespondError(c, http.StatusUnauthorized, nil, "unauthorized")
+	}
+
+	// Ideally we should check if user is an expert here, or rely on middleware/service check
+	// Assuming an expert user has an associated Expert record or ID.
+	// Based on the code, we might need to find the expert ID associated with this user.
+	// Let's assume for now the user context has what we need or we look it up.
+	// Checking the service CreateBooking, it takes expertID passed from frontend.
+	// But here the logged in user IS the expert.
+	// We need to find the Expert record for this UserID.
+
+	db := database.GetDB()
+	var expert models.Expert
+	if err := db.Where("user_id = ?", user.ID).First(&expert).Error; err != nil {
+		return utils.RespondError(c, http.StatusForbidden, err, "expert profile not found")
+	}
+
+	status := c.QueryParam("status")
+	bookings, err := services.GetBookingsByExpertID(expert.ID, status)
+	if err != nil {
+		return utils.RespondError(c, http.StatusInternalServerError, err, "failed to fetch bookings")
+	}
+
+	return utils.RespondSuccess(c, http.StatusOK, "bookings fetched successfully", bookings)
+}
+
+type UpdateBookingStatusRequest struct {
+	Status string `json:"status" validate:"required"`
+}
+
+func UpdateBookingStatus(c echo.Context) error {
+	idParam := c.Param("id")
+	id, err := strconv.Atoi(idParam)
+	if err != nil {
+		return utils.RespondError(c, http.StatusBadRequest, nil, "invalid booking id")
+	}
+	bookingID := uint(id)
+
+	var req UpdateBookingStatusRequest
+	if err := c.Bind(&req); err != nil {
+		return utils.RespondError(c, http.StatusBadRequest, err, "invalid request body")
+	}
+
+	user, ok := c.Get("user").(*models.User)
+	if !ok {
+		return utils.RespondError(c, http.StatusUnauthorized, nil, "unauthorized")
+	}
+
+	db := database.GetDB()
+	var expert models.Expert
+	if err := db.Where("user_id = ?", user.ID).First(&expert).Error; err != nil {
+		return utils.RespondError(c, http.StatusForbidden, err, "expert profile not found")
+	}
+
+	if err := services.UpdateBookingStatus(bookingID, expert.ID, models.BookingStatus(req.Status)); err != nil {
+		return utils.RespondError(c, http.StatusBadRequest, err, "failed to update booking status")
+	}
+
+	return utils.RespondSuccess(c, http.StatusOK, "booking status updated successfully", nil)
 }

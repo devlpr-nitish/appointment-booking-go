@@ -20,6 +20,7 @@ func ExpertRoutes(e *echo.Echo) {
 
 	g.POST("/profile", handlers.CreateExpertProfile)
 	g.GET("/profile", handlers.GetExpertProfile)
+	g.GET("/stats", handlers.GetExpertStats)
 	g.PATCH("/profile", handlers.UpdateExpertProfile)
 
 	// Availability routes

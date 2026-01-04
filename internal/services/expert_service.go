@@ -2,6 +2,7 @@ package services
 
 import (
 	"errors"
+	"time"
 
 	"github.com/devlpr-nitish/appointment-booking-go/internal/database"
 	"github.com/devlpr-nitish/appointment-booking-go/internal/models"
@@ -111,4 +112,51 @@ func GetExpertById(id uint) (*models.Expert, error) {
 		return nil, err
 	}
 	return &expert, nil
+}
+
+func GetExpertStats(expertID uint) (*models.ExpertStats, error) {
+	db := database.GetDB()
+	var stats models.ExpertStats
+
+	// 1. Total Earnings (Sum of TotalPrice for completed bookings)
+	var totalEarnings float64
+	if err := db.Model(&models.Booking{}).
+		Where("expert_id = ? AND status = ?", expertID, models.BookingStatusCompleted).
+		Select("COALESCE(SUM(total_price), 0)").Scan(&totalEarnings).Error; err != nil {
+		return nil, err
+	}
+	stats.TotalEarnings = totalEarnings
+
+	// 2. Upcoming Sessions (Count of confirmed bookings with start_time in future)
+	var upcomingSessions int64
+	today := time.Now().Format("2006-01-02")
+	if err := db.Model(&models.Booking{}).
+		Where("expert_id = ? AND status = ? AND booking_date >= ?", expertID, models.BookingStatusConfirmed, today).
+		Count(&upcomingSessions).Error; err != nil {
+		return nil, err
+	}
+	stats.UpcomingSessions = int(upcomingSessions)
+
+	// 3. Completed Sessions
+	var completedSessions int64
+	if err := db.Model(&models.Booking{}).
+		Where("expert_id = ? AND status = ?", expertID, models.BookingStatusCompleted).
+		Count(&completedSessions).Error; err != nil {
+		return nil, err
+	}
+	stats.CompletedSessions = int(completedSessions)
+
+	// 4. Pending Requests
+	var pendingRequests int64
+	if err := db.Model(&models.Booking{}).
+		Where("expert_id = ? AND status = ?", expertID, models.BookingStatusPending).
+		Count(&pendingRequests).Error; err != nil {
+		return nil, err
+	}
+	stats.PendingRequests = int(pendingRequests)
+
+	// 5. Average Rating (Placeholder)
+	stats.AverageRating = 0.0
+
+	return &stats, nil
 }

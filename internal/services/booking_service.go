@@ -111,6 +111,21 @@ func GetBookingsByUserID(userID uint) ([]models.Booking, error) {
 	return bookings, nil
 }
 
+func GetBookingsByExpertID(expertID uint, status string) ([]models.Booking, error) {
+	db := database.GetDB()
+	var bookings []models.Booking
+	query := db.Preload("User").Where("expert_id = ?", expertID)
+
+	if status != "" && status != "all" {
+		query = query.Where("status = ?", status)
+	}
+
+	if err := query.Order("booking_date desc, start_time desc").Find(&bookings).Error; err != nil {
+		return nil, err
+	}
+	return bookings, nil
+}
+
 func CancelBooking(bookingID, userID uint, reason string) error {
 	db := database.GetDB()
 	var booking models.Booking
@@ -149,5 +164,39 @@ func CancelBooking(bookingID, userID uint, reason string) error {
 
 	booking.Status = models.BookingStatusCancelled
 	booking.CancellationReason = reason
+	return db.Save(&booking).Error
+}
+
+func UpdateBookingStatus(bookingID, expertID uint, status models.BookingStatus) error {
+	db := database.GetDB()
+	var booking models.Booking
+
+	if err := db.First(&booking, bookingID).Error; err != nil {
+		return err
+	}
+
+	if booking.ExpertID != expertID {
+		return errors.New("unauthorized to update this booking")
+	}
+
+	// Validate transitions
+	switch booking.Status {
+	case models.BookingStatusPending:
+		if status != models.BookingStatusConfirmed && status != models.BookingStatusCancelled {
+			return errors.New("invalid status transition from pending")
+		}
+	case models.BookingStatusConfirmed:
+		if status != models.BookingStatusCancelled && status != models.BookingStatusCompleted {
+			return errors.New("invalid status transition from confirmed")
+		}
+	case models.BookingStatusCancelled:
+		return errors.New("cannot update a cancelled booking")
+	case models.BookingStatusCompleted:
+		return errors.New("cannot update a completed booking")
+	default:
+		return errors.New("unknown booking status")
+	}
+
+	booking.Status = status
 	return db.Save(&booking).Error
 }

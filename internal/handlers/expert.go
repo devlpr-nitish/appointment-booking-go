@@ -164,3 +164,22 @@ func GetExpertById(c echo.Context) error {
 
 	return utils.RespondSuccess(c, http.StatusOK, "expert retrieved successfully", expert)
 }
+
+func GetExpertStats(c echo.Context) error {
+	user, ok := c.Get("user").(*models.User)
+	if !ok {
+		return utils.RespondError(c, http.StatusUnauthorized, nil, "unauthorized")
+	}
+
+	expert, err := services.GetExpertProfile(user.ID)
+	if err != nil {
+		return utils.RespondError(c, http.StatusForbidden, err, "expert profile not found")
+	}
+
+	stats, err := services.GetExpertStats(expert.ID)
+	if err != nil {
+		return utils.RespondError(c, http.StatusInternalServerError, err, "failed to fetch expert stats")
+	}
+
+	return utils.RespondSuccess(c, http.StatusOK, "expert stats retrieved successfully", stats)
+}
