@@ -44,10 +44,18 @@ func Connect(cfg *config.Config) *gorm.DB {
 		&models.Booking{},
 		&models.Payment{},
 		&models.Review{},
+		&models.Category{},
+		&models.Request{},
+		&models.Offer{},
 	)
 
 	if err != nil {
 		log.Fatalf("Failed to migrate models: %v", err)
+	}
+
+	// Seed categories
+	if err := SeedCategories(db); err != nil {
+		log.Printf("Warning: Failed to seed categories: %v", err)
 	}
 
 	DB = db

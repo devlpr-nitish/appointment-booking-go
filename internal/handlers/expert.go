@@ -8,6 +8,7 @@ import (
 	"github.com/devlpr-nitish/appointment-booking-go/internal/models"
 	"github.com/devlpr-nitish/appointment-booking-go/internal/services"
 	"github.com/devlpr-nitish/appointment-booking-go/internal/utils"
+	"github.com/google/uuid"
 	"github.com/labstack/echo/v4"
 )
 
@@ -18,9 +19,10 @@ type CreateExpertRequest struct {
 }
 
 type UpdateExpertRequest struct {
-	Bio        string  `json:"bio"`
-	Expertise  string  `json:"expertise"`
-	HourlyRate float64 `json:"hourly_rate"`
+	Bio        string     `json:"bio"`
+	Expertise  string     `json:"expertise"`
+	HourlyRate float64    `json:"hourly_rate"`
+	CategoryID *uuid.UUID `json:"category_id"`
 }
 
 func CreateExpertProfile(c echo.Context) error {
@@ -93,7 +95,7 @@ func UpdateExpertProfile(c echo.Context) error {
 		return utils.RespondError(c, http.StatusUnauthorized, nil, "unauthorized")
 	}
 
-	expert, err := services.UpdateExpertProfile(user.ID, req.Bio, req.Expertise, req.HourlyRate)
+	expert, err := services.UpdateExpertProfile(user.ID, req.Bio, req.Expertise, req.HourlyRate, req.CategoryID)
 	if err != nil {
 		return utils.RespondError(c, http.StatusInternalServerError, err, "failed to update expert profile")
 	}

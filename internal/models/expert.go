@@ -1,17 +1,23 @@
 package models
 
-import "time"
+import (
+	"time"
+
+	"github.com/google/uuid"
+)
 
 type Expert struct {
-	ID          uint      `gorm:"primaryKey" json:"id"`
-	UserID      uint      `gorm:"not null;uniqueIndex" json:"user_id"`
-	Bio         string    `json:"bio"`
-	Expertise   string    `json:"expertise"`
-	HourlyRate  float64   `json:"hourly_rate"`
-	IsVerified  bool      `json:"is_verified" gorm:"default:false"`
-	User        User      `gorm:"foreignKey:UserID" json:"user,omitempty"`
-	GeneratedAt time.Time `gorm:"autoCreateTime" json:"created_at"`
-	UpdatedAt   time.Time `gorm:"autoUpdateTime" json:"updated_at"`
+	ID          uint       `gorm:"primaryKey" json:"id"`
+	UserID      uint       `gorm:"not null;uniqueIndex" json:"user_id"`
+	Bio         string     `json:"bio"`
+	Expertise   string     `json:"expertise"`
+	HourlyRate  float64    `json:"hourly_rate"`
+	IsVerified  bool       `json:"is_verified" gorm:"default:false"`
+	CategoryID  *uuid.UUID `gorm:"type:uuid" json:"category_id"`
+	Category    Category   `gorm:"foreignKey:CategoryID" json:"category,omitempty"`
+	User        User       `gorm:"foreignKey:UserID" json:"user,omitempty"`
+	GeneratedAt time.Time  `gorm:"autoCreateTime" json:"created_at"`
+	UpdatedAt   time.Time  `gorm:"autoUpdateTime" json:"updated_at"`
 }
 
 type ExpertStats struct {

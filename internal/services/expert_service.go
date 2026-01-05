@@ -6,6 +6,7 @@ import (
 
 	"github.com/devlpr-nitish/appointment-booking-go/internal/database"
 	"github.com/devlpr-nitish/appointment-booking-go/internal/models"
+	"github.com/google/uuid"
 	"gorm.io/gorm"
 )
 
@@ -46,7 +47,7 @@ func CreateExpertProfile(userID uint, bio, expertise string, hourlyRate float64)
 func GetExpertProfile(userID uint) (*models.Expert, error) {
 	db := database.GetDB()
 	var expert models.Expert
-	if err := db.Preload("User").Where("user_id = ?", userID).First(&expert).Error; err != nil {
+	if err := db.Preload("User").Preload("Category").Where("user_id = ?", userID).First(&expert).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, errors.New("expert profile not found")
 		}
@@ -55,7 +56,7 @@ func GetExpertProfile(userID uint) (*models.Expert, error) {
 	return &expert, nil
 }
 
-func UpdateExpertProfile(userID uint, bio, expertise string, hourlyRate float64) (*models.Expert, error) {
+func UpdateExpertProfile(userID uint, bio, expertise string, hourlyRate float64, categoryID *uuid.UUID) (*models.Expert, error) {
 	db := database.GetDB()
 	var expert models.Expert
 
@@ -71,6 +72,9 @@ func UpdateExpertProfile(userID uint, bio, expertise string, hourlyRate float64)
 	}
 	if hourlyRate > 0 {
 		expert.HourlyRate = hourlyRate
+	}
+	if categoryID != nil {
+		expert.CategoryID = categoryID
 	}
 
 	if err := db.Save(&expert).Error; err != nil {
