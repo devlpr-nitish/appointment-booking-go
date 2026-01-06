@@ -12,10 +12,14 @@ import (
 
 type RequestHandler struct {
 	service services.RequestService
+	hub     *Hub
 }
 
-func NewRequestHandler(service services.RequestService) *RequestHandler {
-	return &RequestHandler{service: service}
+func NewRequestHandler(service services.RequestService, hub *Hub) *RequestHandler {
+	return &RequestHandler{
+		service: service,
+		hub:     hub,
+	}
 }
 
 type CreateRequestInput struct {
@@ -28,6 +32,11 @@ func (h *RequestHandler) CreateRequest(c echo.Context) error {
 	user, ok := c.Get("user").(*models.User)
 	if !ok {
 		return utils.RespondError(c, http.StatusUnauthorized, nil, "unauthorized")
+	}
+
+	// Only users (not experts) can create requests
+	if user.Role != models.RoleUser {
+		return utils.RespondError(c, http.StatusForbidden, nil, "only users can create requests")
 	}
 
 	var input CreateRequestInput
@@ -44,7 +53,15 @@ func (h *RequestHandler) CreateRequest(c echo.Context) error {
 		return utils.RespondError(c, http.StatusInternalServerError, err, "failed to create request")
 	}
 
-	// TODO: Broadcast NEW_REQUEST event via WebSocket
+	// Broadcast NEW_REQUEST event via WebSocket to notify experts
+	if h.hub != nil {
+		h.hub.BroadcastEvent("NEW_REQUEST", map[string]interface{}{
+			"request_id":  req.ID,
+			"category_id": req.CategoryID,
+			"amount":      req.InitialAmount,
+			"user_id":     req.UserID,
+		})
+	}
 
 	return utils.RespondSuccess(c, http.StatusCreated, "request created successfully", req)
 }

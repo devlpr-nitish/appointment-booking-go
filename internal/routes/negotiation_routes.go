@@ -26,8 +26,8 @@ func NegotiationRoutes(e *echo.Echo) {
 
 	// Initialize Handlers
 	categoryHandler := handlers.NewCategoryHandler(categoryRepo)
-	reqHandler := handlers.NewRequestHandler(reqService)
-	offerHandler := handlers.NewOfferHandler(offerService)
+	reqHandler := handlers.NewRequestHandler(reqService, Hub)
+	offerHandler := handlers.NewOfferHandler(offerService, Hub)
 
 	// Initialize WebSocket Hub
 	Hub = handlers.NewHub()

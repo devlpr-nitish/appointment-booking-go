@@ -12,10 +12,14 @@ import (
 
 type OfferHandler struct {
 	service services.OfferService
+	hub     *Hub
 }
 
-func NewOfferHandler(service services.OfferService) *OfferHandler {
-	return &OfferHandler{service: service}
+func NewOfferHandler(service services.OfferService, hub *Hub) *OfferHandler {
+	return &OfferHandler{
+		service: service,
+		hub:     hub,
+	}
 }
 
 type CreateOfferInput struct {
@@ -46,7 +50,15 @@ func (h *OfferHandler) CreateOffer(c echo.Context) error {
 		return utils.RespondError(c, http.StatusInternalServerError, err, "failed to create offer")
 	}
 
-	// TODO: Broadcast NEW_OFFER event via WebSocket
+	// Broadcast NEW_OFFER event via WebSocket to notify the user
+	if h.hub != nil {
+		h.hub.BroadcastEvent("NEW_OFFER", map[string]interface{}{
+			"offer_id":   offer.ID,
+			"request_id": offer.RequestID,
+			"expert_id":  offer.ExpertID,
+			"amount":     offer.Amount,
+		})
+	}
 
 	return utils.RespondSuccess(c, http.StatusCreated, "offer created successfully", offer)
 }
@@ -77,7 +89,12 @@ func (h *OfferHandler) AcceptOffer(c echo.Context) error {
 		return utils.RespondError(c, http.StatusInternalServerError, err, "failed to accept offer")
 	}
 
-	// TODO: Broadcast OFFER_ACCEPTED event
+	// Broadcast OFFER_ACCEPTED event via WebSocket
+	if h.hub != nil {
+		h.hub.BroadcastEvent("OFFER_ACCEPTED", map[string]interface{}{
+			"offer_id": offerID,
+		})
+	}
 
 	return utils.RespondSuccess(c, http.StatusOK, "offer accepted successfully", nil)
 }
