@@ -14,7 +14,8 @@ type User struct {
 	ID        uint      `gorm:"primaryKey" json:"id"`
 	Name      string    `json:"name"`
 	Email     string    `gorm:"uniqueIndex" json:"email"`
-	Password  string    `json:"-"` // Don't return password
+	ImageURL  string    `json:"image_url"`
+	Password  string    `json:"-"`
 	Role      UserRole  `gorm:"type:varchar(20)" json:"role"`
 	CreatedAt time.Time `gorm:"autoCreateTime" json:"created_at"`
 	UpdatedAt time.Time `gorm:"autoUpdateTime" json:"updated_at"`

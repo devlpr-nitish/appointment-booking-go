@@ -76,7 +76,7 @@ func LoginUser(identifier, password string) (string, error) {
 		return "", errors.New("invalid credentials")
 	}
 
-	token, err := utils.GenerateJWT(user.ID, user.Email, user.Name, string(user.Role))
+	token, err := utils.GenerateJWT(user.ID, user.Email, user.Name, string(user.Role), user.ImageURL)
 	if err != nil {
 		return "", err
 	}
@@ -92,4 +92,22 @@ func hashPassword(password string) (string, error) {
 func checkPasswordHash(password, hash string) bool {
 	err := bcrypt.CompareHashAndPassword([]byte(hash), []byte(password))
 	return err == nil
+}
+
+func UpdateProfile(userID uint, name, imageURL string) (*models.User, error) {
+	db := database.GetDB()
+	var user models.User
+
+	if err := db.First(&user, userID).Error; err != nil {
+		return nil, errors.New("user not found")
+	}
+
+	user.Name = name
+	user.ImageURL = imageURL
+
+	if err := db.Save(&user).Error; err != nil {
+		return nil, err
+	}
+
+	return &user, nil
 }
