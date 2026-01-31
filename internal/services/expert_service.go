@@ -100,12 +100,30 @@ func GetExperts(page, limit int) ([]models.Expert, int64, error) {
 	return experts, total, nil
 }
 
-func GetExpertByCatergoryName(categoryName string) ([]models.Expert, error) {
+func SearchExperts(query, category string) ([]models.Expert, error) {
 	db := database.GetDB()
 	var experts []models.Expert
-	if err := db.Preload("User").Where("expertise = ?", categoryName).Find(&experts).Error; err != nil {
+
+	tx := db.Model(&models.Expert{}).
+		Joins("LEFT JOIN users ON users.id = experts.user_id").
+		Preload("User")
+
+	if category != "" && category != "all" {
+		tx = tx.Where("experts.expertise = ?", category)
+	}
+
+	if query != "" {
+		searchQuery := "%" + query + "%"
+		tx = tx.Where(
+			"experts.expertise ILIKE ? OR users.name ILIKE ?",
+			searchQuery, searchQuery,
+		)
+	}
+
+	if err := tx.Find(&experts).Error; err != nil {
 		return nil, err
 	}
+
 	return experts, nil
 }
 

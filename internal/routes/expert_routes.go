@@ -11,7 +11,7 @@ func ExpertRoutes(e *echo.Echo) {
 
 	// Public routes (no auth required)
 	g.GET("/get-experts", handlers.GetExperts)
-	g.GET("/search", handlers.GetExpertByCatergoryName)
+	g.GET("/search", handlers.SearchExperts)
 	g.GET("/get-expert-by-id/:id", handlers.GetExpertById)
 	g.GET("/available-slots", handlers.GetAvailableSlots)
 

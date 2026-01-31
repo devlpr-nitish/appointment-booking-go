@@ -134,15 +134,13 @@ func GetExperts(c echo.Context) error {
 	return utils.RespondSuccess(c, http.StatusOK, "experts retrieved successfully", response)
 }
 
-func GetExpertByCatergoryName(c echo.Context) error {
-	categoryName := c.QueryParam("category")
-	if categoryName == "" {
-		return utils.RespondError(c, http.StatusBadRequest, nil, "category name is required")
-	}
+func SearchExperts(c echo.Context) error {
+	query := c.QueryParam("q")
+	category := c.QueryParam("category")
 
-	experts, err := services.GetExpertByCatergoryName(categoryName)
+	experts, err := services.SearchExperts(query, category)
 	if err != nil {
-		return utils.RespondError(c, http.StatusInternalServerError, err, "failed to get experts")
+		return utils.RespondError(c, http.StatusInternalServerError, err, "failed to search experts")
 	}
 
 	return utils.RespondSuccess(c, http.StatusOK, "experts retrieved successfully", experts)
