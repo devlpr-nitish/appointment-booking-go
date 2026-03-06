@@ -13,6 +13,7 @@ const (
 	RequestStatusOpen     RequestStatus = "OPEN"
 	RequestStatusAccepted RequestStatus = "ACCEPTED"
 	RequestStatusClosed   RequestStatus = "CLOSED"
+	RequestStatusCanceled RequestStatus = "CANCELED"
 )
 
 type Request struct {

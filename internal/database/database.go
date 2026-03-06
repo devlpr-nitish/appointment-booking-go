@@ -39,12 +39,13 @@ func Connect(cfg *config.Config) *gorm.DB {
 	// AutoMigrate all models
 	err = db.AutoMigrate(
 		&models.User{},
+		&models.Category{},
 		&models.Expert{},
+		&models.ExpertCategory{},
 		&models.AvailabilitySlot{},
 		&models.Booking{},
 		&models.Payment{},
 		&models.Review{},
-		&models.Category{},
 		&models.Request{},
 		&models.Offer{},
 	)

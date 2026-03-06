@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"sync"
 
+	"github.com/google/uuid"
 	"github.com/gorilla/websocket"
 	"github.com/labstack/echo/v4"
 )
@@ -31,10 +32,12 @@ type WSEvent struct {
 	Payload interface{} `json:"payload"`
 }
 
+// Client holds a WebSocket connection and a set of category IDs the expert is subscribed to
 type Client struct {
-	hub  *Hub
-	conn *websocket.Conn
-	send chan []byte
+	hub         *Hub
+	conn        *websocket.Conn
+	send        chan []byte
+	categoryIDs []uuid.UUID // categories this expert cares about (empty = receive all)
 }
 
 type Hub struct {
@@ -83,17 +86,52 @@ func (h *Hub) Run() {
 	}
 }
 
+// BroadcastEvent sends a WS event to ALL connected clients (used for OFFER_ACCEPTED etc.)
 func (h *Hub) BroadcastEvent(eventType EventType, payload interface{}) {
-	event := WSEvent{
-		Type:    eventType,
-		Payload: payload,
-	}
+	event := WSEvent{Type: eventType, Payload: payload}
 	msg, err := json.Marshal(event)
 	if err != nil {
 		log.Println("Error marshalling WS event:", err)
 		return
 	}
 	h.broadcast <- msg
+}
+
+// BroadcastToCategory sends a WS event only to clients subscribed to the given categoryID.
+// Clients with no categories registered receive it too (backward compat / non-expert clients).
+func (h *Hub) BroadcastToCategory(categoryID uuid.UUID, eventType EventType, payload interface{}) {
+	event := WSEvent{Type: eventType, Payload: payload}
+	msg, err := json.Marshal(event)
+	if err != nil {
+		log.Println("Error marshalling WS event:", err)
+		return
+	}
+
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	for client := range h.clients {
+		if matchesCategory(client.categoryIDs, categoryID) {
+			select {
+			case client.send <- msg:
+			default:
+				close(client.send)
+				delete(h.clients, client)
+			}
+		}
+	}
+}
+
+// matchesCategory returns true if the client has no filter (empty list) or if categoryID is in the list.
+func matchesCategory(clientCats []uuid.UUID, categoryID uuid.UUID) bool {
+	if len(clientCats) == 0 {
+		return true // no filter set — receive all (e.g., user clients)
+	}
+	for _, c := range clientCats {
+		if c == categoryID {
+			return true
+		}
+	}
+	return false
 }
 
 type WebSocketHandler struct {
@@ -104,22 +142,51 @@ func NewWebSocketHandler(hub *Hub) *WebSocketHandler {
 	return &WebSocketHandler{hub: hub}
 }
 
+// HandleConnection upgrades to WebSocket.
+// Query param: ?categories=uuid1,uuid2,... (expert passes their category IDs)
 func (h *WebSocketHandler) HandleConnection(c echo.Context) error {
 	conn, err := upgrader.Upgrade(c.Response(), c.Request(), nil)
 	if err != nil {
 		return err
 	}
 
-	client := &Client{hub: h.hub, conn: conn, send: make(chan []byte, 256)}
+	// Parse optional category filter from query string
+	var catIDs []uuid.UUID
+	if raw := c.QueryParam("categories"); raw != "" {
+		for _, part := range splitComma(raw) {
+			if id, err := uuid.Parse(part); err == nil {
+				catIDs = append(catIDs, id)
+			}
+		}
+	}
+
+	client := &Client{
+		hub:         h.hub,
+		conn:        conn,
+		send:        make(chan []byte, 256),
+		categoryIDs: catIDs,
+	}
 	client.hub.register <- client
 
-	// Start write pump in a goroutine
 	go client.writePump()
-
-	// Start read pump (for pings/closes)
 	go client.readPump()
 
 	return nil
+}
+
+func splitComma(s string) []string {
+	var parts []string
+	start := 0
+	for i := 0; i <= len(s); i++ {
+		if i == len(s) || s[i] == ',' {
+			p := s[start:i]
+			if p != "" {
+				parts = append(parts, p)
+			}
+			start = i + 1
+		}
+	}
+	return parts
 }
 
 func (c *Client) readPump() {

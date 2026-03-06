@@ -6,6 +6,7 @@ import (
 	"github.com/devlpr-nitish/appointment-booking-go/internal/middleware"
 	"github.com/devlpr-nitish/appointment-booking-go/internal/repositories"
 	"github.com/devlpr-nitish/appointment-booking-go/internal/services"
+	"github.com/devlpr-nitish/appointment-booking-go/internal/workers"
 	"github.com/labstack/echo/v4"
 )
 
@@ -34,6 +35,9 @@ func NegotiationRoutes(e *echo.Echo) {
 	go Hub.Run()
 	wsHandler := handlers.NewWebSocketHandler(Hub)
 
+	// Start Background Workers
+	workers.StartRequestCleaner(requestRepo, Hub)
+
 	// Routes
 	api := e.Group("/api")
 
@@ -47,6 +51,7 @@ func NegotiationRoutes(e *echo.Echo) {
 	// Requests
 	api.POST("/requests", reqHandler.CreateRequest, middleware.AuthMiddleware)
 	api.GET("/requests/:id", reqHandler.GetRequest, middleware.AuthMiddleware) // User or Expert
+	api.POST("/requests/:id/cancel", reqHandler.CancelRequest, middleware.AuthMiddleware) // User cancels
 	api.GET("/expert/requests", reqHandler.GetExpertRequests, middleware.AuthMiddleware)
 
 	// Offers

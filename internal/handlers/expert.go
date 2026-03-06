@@ -14,15 +14,16 @@ import (
 
 type CreateExpertRequest struct {
 	Bio        string  `json:"bio" validate:"required"`
-	Expertise  string  `json:"expertise" validate:"required"`
 	HourlyRate float64 `json:"hourly_rate" validate:"required,gt=0"`
 }
 
+// UpdateExpertRequest supports both a single category_id (legacy) and
+// category_ids (multi-category). If category_ids is provided it takes precedence.
 type UpdateExpertRequest struct {
-	Bio        string     `json:"bio"`
-	Expertise  string     `json:"expertise"`
-	HourlyRate float64    `json:"hourly_rate"`
-	CategoryID *uuid.UUID `json:"category_id"`
+	Bio         string      `json:"bio"`
+	HourlyRate  float64     `json:"hourly_rate"`
+	CategoryID  *uuid.UUID  `json:"category_id"`
+	CategoryIDs []uuid.UUID `json:"category_ids"`
 }
 
 func CreateExpertProfile(c echo.Context) error {
@@ -36,7 +37,7 @@ func CreateExpertProfile(c echo.Context) error {
 		return utils.RespondError(c, http.StatusUnauthorized, nil, "unauthorized")
 	}
 
-	expert, err := services.CreateExpertProfile(user.ID, req.Bio, req.Expertise, req.HourlyRate)
+	expert, err := services.CreateExpertProfile(user.ID, req.Bio, req.HourlyRate)
 	if err != nil {
 		return utils.RespondError(c, http.StatusInternalServerError, err, "failed to create expert profile")
 	}
@@ -58,9 +59,16 @@ func GetExpertProfile(c echo.Context) error {
 	// Calculate profile completion percentage
 	completionPercentage := calculateProfileCompletion(expert)
 
+	// Build category_ids array for the response
+	categoryIDs := make([]string, 0, len(expert.Categories))
+	for _, cat := range expert.Categories {
+		categoryIDs = append(categoryIDs, cat.ID.String())
+	}
+
 	response := map[string]interface{}{
 		"expert":                expert,
 		"completion_percentage": completionPercentage,
+		"category_ids":          categoryIDs,
 	}
 
 	return utils.RespondSuccess(c, http.StatusOK, "expert profile retrieved successfully", response)
@@ -68,16 +76,16 @@ func GetExpertProfile(c echo.Context) error {
 
 // calculateProfileCompletion calculates the profile completion percentage
 func calculateProfileCompletion(expert *models.Expert) int {
-	totalFields := 3
+	totalFields := 3 // bio, hourly_rate, at-least-one-category
 	completedFields := 0
 
 	if expert.Bio != "" {
 		completedFields++
 	}
-	if expert.Expertise != "" {
+	if expert.HourlyRate > 0 {
 		completedFields++
 	}
-	if expert.HourlyRate > 0 {
+	if len(expert.Categories) > 0 || expert.CategoryID != nil {
 		completedFields++
 	}
 
@@ -95,12 +103,34 @@ func UpdateExpertProfile(c echo.Context) error {
 		return utils.RespondError(c, http.StatusUnauthorized, nil, "unauthorized")
 	}
 
-	expert, err := services.UpdateExpertProfile(user.ID, req.Bio, req.Expertise, req.HourlyRate, req.CategoryID)
+	// Decide which category list to use
+	var categoryIDsPtr []uuid.UUID
+	if len(req.CategoryIDs) > 0 {
+		// Multi-category wins
+		categoryIDsPtr = req.CategoryIDs
+	} else if req.CategoryID != nil {
+		// Fallback to single category
+		categoryIDsPtr = []uuid.UUID{*req.CategoryID}
+	}
+	// If neither set, categoryIDsPtr remains nil → service won't change categories
+
+	expert, err := services.UpdateExpertProfile(user.ID, req.Bio, req.HourlyRate, req.CategoryID, categoryIDsPtr)
 	if err != nil {
 		return utils.RespondError(c, http.StatusInternalServerError, err, "failed to update expert profile")
 	}
 
-	return utils.RespondSuccess(c, http.StatusOK, "expert profile updated successfully", expert)
+	// Build category_ids for response
+	categoryIDs := make([]string, 0, len(expert.Categories))
+	for _, cat := range expert.Categories {
+		categoryIDs = append(categoryIDs, cat.ID.String())
+	}
+
+	result := map[string]interface{}{
+		"expert":       expert,
+		"category_ids": categoryIDs,
+	}
+
+	return utils.RespondSuccess(c, http.StatusOK, "expert profile updated successfully", result)
 }
 
 func GetExperts(c echo.Context) error {

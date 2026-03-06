@@ -50,7 +50,6 @@ func RegisterUser(email, password, name, role string) (*models.User, error) {
 		expert := models.Expert{
 			UserID:     user.ID,
 			Bio:        "",
-			Expertise:  "",
 			HourlyRate: 0,
 			IsVerified: false,
 		}

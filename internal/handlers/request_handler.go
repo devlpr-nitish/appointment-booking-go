@@ -53,9 +53,9 @@ func (h *RequestHandler) CreateRequest(c echo.Context) error {
 		return utils.RespondError(c, http.StatusInternalServerError, err, "failed to create request")
 	}
 
-	// Broadcast NEW_REQUEST event via WebSocket to notify experts
+	// Broadcast NEW_REQUEST only to experts whose categories include this request's category
 	if h.hub != nil {
-		h.hub.BroadcastEvent("NEW_REQUEST", map[string]interface{}{
+		h.hub.BroadcastToCategory(input.CategoryID, "NEW_REQUEST", map[string]interface{}{
 			"request_id":  req.ID,
 			"category_id": req.CategoryID,
 			"amount":      req.InitialAmount,
@@ -72,17 +72,29 @@ func (h *RequestHandler) GetExpertRequests(c echo.Context) error {
 		return utils.RespondError(c, http.StatusUnauthorized, nil, "unauthorized")
 	}
 
-	// Fetch Expert Profile to get CategoryID
+	// Fetch Expert Profile with preloaded Categories (multi-category relation)
 	expert, err := services.GetExpertProfile(user.ID)
 	if err != nil {
 		return utils.RespondError(c, http.StatusForbidden, err, "user is not a registered expert")
 	}
 
-	if expert.CategoryID == nil {
-		return utils.RespondError(c, http.StatusBadRequest, nil, "expert has no assigned category")
+	// Build a slice of all category IDs (multi-category takes priority over legacy single)
+	var categoryIDs []uuid.UUID
+	for _, cat := range expert.Categories {
+		categoryIDs = append(categoryIDs, cat.ID)
 	}
 
-	requests, err := h.service.GetOpenRequestsByCategory(*expert.CategoryID)
+	// Fallback: use legacy single CategoryID if multi-category list is empty
+	if len(categoryIDs) == 0 && expert.CategoryID != nil {
+		categoryIDs = append(categoryIDs, *expert.CategoryID)
+	}
+
+	if len(categoryIDs) == 0 {
+		// Expert has no categories assigned yet — return empty list (not 400)
+		return utils.RespondSuccess(c, http.StatusOK, "no categories assigned yet", []models.Request{})
+	}
+
+	requests, err := h.service.GetOpenRequestsByCategories(categoryIDs)
 	if err != nil {
 		return utils.RespondError(c, http.StatusInternalServerError, err, "failed to fetch requests")
 	}
@@ -103,4 +115,32 @@ func (h *RequestHandler) GetRequest(c echo.Context) error {
 	}
 
 	return utils.RespondSuccess(c, http.StatusOK, "request retrieved successfully", req)
+}
+
+func (h *RequestHandler) CancelRequest(c echo.Context) error {
+	user, ok := c.Get("user").(*models.User)
+	if !ok {
+		return utils.RespondError(c, http.StatusUnauthorized, nil, "unauthorized")
+	}
+
+	idStr := c.Param("id")
+	id, err := uuid.Parse(idStr)
+	if err != nil {
+		return utils.RespondError(c, http.StatusBadRequest, err, "invalid request id")
+	}
+
+	err = h.service.CancelRequest(id, user.ID)
+	if err != nil {
+		return utils.RespondError(c, http.StatusInternalServerError, err, "failed to cancel request")
+	}
+
+	// Fetch full request to get the category ID for broadcast
+	req, _ := h.service.GetRequestByID(id)
+	if req != nil && h.hub != nil {
+		h.hub.BroadcastEvent("REQUEST_CANCELED", map[string]interface{}{
+			"request_id": id,
+		})
+	}
+
+	return utils.RespondSuccess(c, http.StatusOK, "request canceled successfully", nil)
 }

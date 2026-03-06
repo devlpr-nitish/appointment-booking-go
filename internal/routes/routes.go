@@ -14,6 +14,7 @@ func Routes(e *echo.Echo) {
 	ReviewRoutes(e)
 	AvailabilityRoutes(e)
 	NegotiationRoutes(e)
+	CategoryRoutes(e)
 
 	e.GET("/", func(c echo.Context) error {
 		return c.JSON(200, map[string]string{

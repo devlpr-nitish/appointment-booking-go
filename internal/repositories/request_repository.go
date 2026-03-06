@@ -1,6 +1,8 @@
 package repositories
 
 import (
+	"time"
+
 	"github.com/devlpr-nitish/appointment-booking-go/internal/models"
 	"github.com/google/uuid"
 	"gorm.io/gorm"
@@ -10,6 +12,8 @@ type RequestRepository interface {
 	Create(request *models.Request) error
 	FindByID(id uuid.UUID) (*models.Request, error)
 	FindAllOpenByCategory(categoryID uuid.UUID) ([]models.Request, error)
+	FindAllOpenByCategories(categoryIDs []uuid.UUID) ([]models.Request, error)
+	FindExpiredOpenRequests(threshold time.Time) ([]models.Request, error)
 	UpdateStatus(id uuid.UUID, status models.RequestStatus) error
 }
 
@@ -33,9 +37,29 @@ func (r *requestRepository) FindByID(id uuid.UUID) (*models.Request, error) {
 
 func (r *requestRepository) FindAllOpenByCategory(categoryID uuid.UUID) ([]models.Request, error) {
 	var requests []models.Request
-	err := r.db.Preload("User").
+	err := r.db.Preload("User").Preload("Category").
 		Where("category_id = ? AND status = ?", categoryID, models.RequestStatusOpen).
+		Order("created_at DESC").
 		Find(&requests).Error
+	return requests, err
+}
+
+// FindAllOpenByCategories returns open requests matching ANY of the provided category IDs.
+func (r *requestRepository) FindAllOpenByCategories(categoryIDs []uuid.UUID) ([]models.Request, error) {
+	var requests []models.Request
+	if len(categoryIDs) == 0 {
+		return requests, nil
+	}
+	err := r.db.Preload("User").Preload("Category").
+		Where("category_id IN ? AND status = ?", categoryIDs, models.RequestStatusOpen).
+		Order("created_at DESC").
+		Find(&requests).Error
+	return requests, err
+}
+
+func (r *requestRepository) FindExpiredOpenRequests(threshold time.Time) ([]models.Request, error) {
+	var requests []models.Request
+	err := r.db.Where("status = ? AND created_at < ?", models.RequestStatusOpen, threshold).Find(&requests).Error
 	return requests, err
 }
 
